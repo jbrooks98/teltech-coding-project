@@ -147,7 +147,10 @@ func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case e.Action == "multiply":
-		e.multiply()
+		err = e.multiply()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		sendJsonResponse(w, e)
 	case e.Action == "divide":
 		err = e.divide()
@@ -156,10 +159,16 @@ func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		sendJsonResponse(w, e)
 	case e.Action == "add":
-		e.add()
+		err = e.add()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		sendJsonResponse(w, e)
 	case e.Action == "subtract":
-		e.subtract()
+		err = e.subtract()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		sendJsonResponse(w, e)
 	default:
 		http.Error(w, "Invalid operator", http.StatusBadRequest)
