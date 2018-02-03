@@ -13,17 +13,17 @@ import (
 )
 
 type equation struct {
-	Action      string
-	Cached      bool
-	X           int
-	Y           int
-	Answer      int
+	Action      string  `json:"action"`
+	Cached      bool    `json:"cached"`
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
+	Answer      float64 `json:"answer"`
 	redisClient *redis.Client
 }
 
-func toInt(s string) (int, error) {
-	var r int
-	r, err := strconv.Atoi(s)
+func toFloat(s string) (float64, error) {
+	var r float64
+	r, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return r, nil
 	}
@@ -67,10 +67,11 @@ func (m *equation) multiply() error {
 	v, err := getCache(key, m.redisClient)
 	if err != nil {
 		m.Answer = m.X * m.Y
-		setCache(m.redisClient, key, strconv.Itoa(m.Answer), time.Minute)
+		a := strconv.FormatFloat(m.Answer, 'f', 2, 64)
+		setCache(m.redisClient, key, a, time.Minute)
 	} else {
 		m.Cached = true
-		m.Answer, err = toInt(v)
+		m.Answer, err = toFloat(v)
 		if err != nil {
 			return errors.New("error converting so integer")
 		}
@@ -87,10 +88,11 @@ func (d *equation) divide() error {
 	if err != nil {
 		d.Answer = d.X / d.Y
 		d.Cached = false
-		setCache(d.redisClient, key, strconv.Itoa(d.Answer), time.Minute)
+		a := strconv.FormatFloat(d.Answer, 'f', 6, 64)
+		setCache(d.redisClient, key, a, time.Minute)
 	} else {
 		d.Cached = true
-		d.Answer, err = toInt(v)
+		d.Answer, err = toFloat(v)
 		if err != nil {
 			return err
 		}
@@ -103,10 +105,11 @@ func (a *equation) add() error {
 	v, err := getCache(key, a.redisClient)
 	if err != nil {
 		a.Answer = a.X + a.Y
-		setCache(a.redisClient, key, strconv.Itoa(a.Answer), time.Minute)
+		s := strconv.FormatFloat(a.Answer, 'f', 6, 64)
+		setCache(a.redisClient, key, s, time.Minute)
 	} else {
 		a.Cached = true
-		a.Answer, err = toInt(v)
+		a.Answer, err = toFloat(v)
 		if err != nil {
 			return err
 		}
@@ -119,10 +122,11 @@ func (s *equation) subtract() error {
 	v, err := getCache(key, s.redisClient)
 	if err != nil {
 		s.Answer = s.X - s.Y
-		setCache(s.redisClient, key, strconv.Itoa(s.Answer), time.Minute)
+		a := strconv.FormatFloat(s.Answer, 'f', 6, 64)
+		setCache(s.redisClient, key, a, time.Minute)
 	} else {
 		s.Cached = true
-		s.Answer, err = toInt(v)
+		s.Answer, err = toFloat(v)
 		if err != nil {
 			return err
 		}
@@ -137,11 +141,11 @@ func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 	if err = r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	e.X, err = toInt(r.Form.Get("x"))
+	e.X, err = toFloat(r.Form.Get("x"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	e.Y, err = toInt(r.Form.Get("y"))
+	e.Y, err = toFloat(r.Form.Get("y"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
