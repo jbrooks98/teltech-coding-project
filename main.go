@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
-	"fmt"
-	
+
 	"github.com/go-redis/redis"
 )
 
@@ -98,7 +98,7 @@ func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	key := fmt.Sprintf("%d%s%d", e.X, e.Action, e.Y)
+	key := fmt.Sprintf("%g%s%g", e.X, e.Action, e.Y)
 	value, err := getCache(key, e.redisClient)
 	if err != nil {
 		e.Cached = false
