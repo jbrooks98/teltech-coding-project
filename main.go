@@ -81,7 +81,7 @@ func (s equation) subtract() float64 {
 
 func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
-
+	var v string
 	e.Action = r.URL.Path[len("/"):]
 
 	if err = r.ParseForm(); err != nil {
@@ -114,28 +114,25 @@ func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case e.Action == "multiply":
 		e.Answer = e.multiply()
-		v := fmt.Sprintf("%g", e.Answer)
-		setCache(e.redisClient, key, v, time.Minute)
+		v = fmt.Sprintf("%g", e.Answer)
 	case e.Action == "divide":
 		if e.X == 0 {
 			http.Error(w, errors.New("cannot divide by zero").Error(), http.StatusBadRequest)
 			return
 		}
 		e.Answer = e.divide()
-		v := fmt.Sprintf("%g", e.Answer)
-		setCache(e.redisClient, key, v, time.Minute)
+		v = fmt.Sprintf("%g", e.Answer)
 	case e.Action == "add":
 		e.Answer = e.add()
-		v := fmt.Sprintf("%g", e.Answer)
-		setCache(e.redisClient, key, v, time.Minute)
+		v = fmt.Sprintf("%g", e.Answer)
 	case e.Action == "subtract":
 		e.Answer = e.subtract()
-		v := fmt.Sprintf("%g", e.Answer)
-		setCache(e.redisClient, key, v, time.Minute)
+		v = fmt.Sprintf("%g", e.Answer)
 	default:
 		http.Error(w, "Invalid operator", http.StatusBadRequest)
 		return
 	}
+	setCache(e.redisClient, key, v, time.Minute)
 	sendJsonResponse(w, e)
 }
 
