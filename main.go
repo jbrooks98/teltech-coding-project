@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-redis/redis"
+	"fmt"
 )
 
 type equation struct {
@@ -30,8 +30,8 @@ func toFloat(s string) (float64, error) {
 	return r, nil
 }
 
-func sendJsonResponse(w http.ResponseWriter, responseBody *equation) error {
-	data, err := json.Marshal(responseBody)
+func sendJsonResponse(w http.ResponseWriter, e *equation) error {
+	data, err := json.Marshal(e)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -49,6 +49,7 @@ func getCache(key string, r *redis.Client) (string, error) {
 		return v, errors.New("key does not exists")
 	}
 	// reset the cache
+	r.Del(key)
 	setCache(r, key, v, time.Minute)
 
 	return v, nil
@@ -62,121 +63,80 @@ func setCache(r *redis.Client, k, v string, t time.Duration) error {
 	return nil
 }
 
-func (m *equation) multiply() error {
-	key := fmt.Sprintf("%d * %d", m.X, m.Y)
-	v, err := getCache(key, m.redisClient)
-	if err != nil {
-		m.Answer = m.X * m.Y
-		a := strconv.FormatFloat(m.Answer, 'f', 2, 64)
-		setCache(m.redisClient, key, a, time.Minute)
-	} else {
-		m.Cached = true
-		m.Answer, err = toFloat(v)
-		if err != nil {
-			return errors.New("error converting so integer")
-		}
-	}
-	return nil
+func (m equation) multiply() float64 {
+	return m.X * m.Y
 }
 
-func (d *equation) divide() error {
-	if d.X == 0 {
-		return errors.New("cannot divide by zero")
-	}
-	key := fmt.Sprintf("%d / %d", d.X, d.Y)
-	v, err := getCache(key, d.redisClient)
-	if err != nil {
-		d.Answer = d.X / d.Y
-		d.Cached = false
-		a := strconv.FormatFloat(d.Answer, 'f', 6, 64)
-		setCache(d.redisClient, key, a, time.Minute)
-	} else {
-		d.Cached = true
-		d.Answer, err = toFloat(v)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (d equation) divide() float64 {
+	return d.X / d.Y
 }
 
-func (a *equation) add() error {
-	key := fmt.Sprintf("%d + %d", a.X, a.Y)
-	v, err := getCache(key, a.redisClient)
-	if err != nil {
-		a.Answer = a.X + a.Y
-		s := strconv.FormatFloat(a.Answer, 'f', 6, 64)
-		setCache(a.redisClient, key, s, time.Minute)
-	} else {
-		a.Cached = true
-		a.Answer, err = toFloat(v)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (a equation) add() float64 {
+	return a.X + a.Y
 }
 
-func (s *equation) subtract() error {
-	key := fmt.Sprintf("%d - %d", s.X, s.Y)
-	v, err := getCache(key, s.redisClient)
-	if err != nil {
-		s.Answer = s.X - s.Y
-		a := strconv.FormatFloat(s.Answer, 'f', 6, 64)
-		setCache(s.redisClient, key, a, time.Minute)
-	} else {
-		s.Cached = true
-		s.Answer, err = toFloat(v)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (s equation) subtract() float64 {
+	return s.X - s.Y
 }
 
 func (e *equation) equationHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
+
 	e.Action = r.URL.Path[len("/"):]
 
 	if err = r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	e.X, err = toFloat(r.Form.Get("x"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	e.Y, err = toFloat(r.Form.Get("y"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	key := fmt.Sprintf("%d%s%d", e.X, e.Action, e.Y)
+	value, err := getCache(key, e.redisClient)
+	if err != nil {
+		e.Cached = false
+	} else {
+		e.Cached = true
+		e.Answer, err = toFloat(value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		sendJsonResponse(w, e)
+		return
 	}
 	switch {
 	case e.Action == "multiply":
-		err = e.multiply()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-		sendJsonResponse(w, e)
+		e.Answer = e.multiply()
+		v := fmt.Sprintf("%g", e.Answer)
+		setCache(e.redisClient, key, v, time.Minute)
 	case e.Action == "divide":
-		err = e.divide()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		if e.X == 0 {
+			http.Error(w, errors.New("cannot divide by zero").Error(), http.StatusBadRequest)
+			return
 		}
-		sendJsonResponse(w, e)
+		e.Answer = e.divide()
+		v := fmt.Sprintf("%g", e.Answer)
+		setCache(e.redisClient, key, v, time.Minute)
 	case e.Action == "add":
-		err = e.add()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-		sendJsonResponse(w, e)
+		e.Answer = e.add()
+		v := fmt.Sprintf("%g", e.Answer)
+		setCache(e.redisClient, key, v, time.Minute)
 	case e.Action == "subtract":
-		err = e.subtract()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-		sendJsonResponse(w, e)
+		e.Answer = e.subtract()
+		v := fmt.Sprintf("%g", e.Answer)
+		setCache(e.redisClient, key, v, time.Minute)
 	default:
 		http.Error(w, "Invalid operator", http.StatusBadRequest)
+		return
 	}
+	sendJsonResponse(w, e)
 }
 
 func main() {
