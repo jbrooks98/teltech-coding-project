@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/go-redis/redis"
 	"fmt"
+	
+	"github.com/go-redis/redis"
 )
 
 type equation struct {
